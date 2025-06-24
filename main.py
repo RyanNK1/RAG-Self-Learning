@@ -1,13 +1,18 @@
 from sentence_transformers import SentenceTransformer
-from langchain.embeddings import HuggingFaceEmbeddings
-from langchain.vectorstores import Chroma
+#from langchain.embeddings import HuggingFaceEmbeddings
+#from langchain.vectorstores import Chroma
 import shutil
 from langchain_community.document_loaders import PyPDFDirectoryLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.schema import Document
 import os
 from langchain.prompts import ChatPromptTemplate
-from langchain.chat_models import ChatOpenAI
+#from langchain.chat_models import ChatOpenAI
+from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_community.vectorstores import Chroma
+from langchain_community.chat_models import ChatOpenAI
+from dotenv import load_dotenv
+load_dotenv()
 
 
 PROMPT_TEMPLATE = """
@@ -70,7 +75,7 @@ def query_rag(query_text):
     results = db.similarity_search_with_relevance_scores(query_text, k=3)
 
     # Handle no results or low relevance
-    if len(results) == 0 or results[0][1] < 0.7:
+    if len(results) == 0 or results[0][1] < 0.5:
         return "No relevant results found."
 
     # Combine the context
@@ -83,17 +88,22 @@ def query_rag(query_text):
     )
 
     # Set up OpenRouter-compatible LLM
-    os.environ["OPENAI_API_KEY"] = os.getenv("OPENROUTER_API_KEY")
+    openrouter_key = os.getenv("OPENROUTER_API_KEY")
+    if not openrouter_key:
+        raise ValueError("OPENROUTER_API_KEY not found in environment variables.")
+    os.environ["OPENAI_API_KEY"] = openrouter_key
+
     os.environ["OPENAI_API_BASE"] = "https://openrouter.ai/api/v1"
 
     model = ChatOpenAI()
 
     # Generate the response
-    response = model.predict(prompt)
+    #response = model.predict(prompt)
+    response = model.invoke(prompt)
     return response
 
 #query = "Explain how the YOLO method works"
-query = "What is the main topic of this document?"
+query = "What is Parkinson's"
 response = query_rag(query)
 print("\nResponse:\n", response)
 
