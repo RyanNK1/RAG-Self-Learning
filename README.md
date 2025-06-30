@@ -421,3 +421,158 @@ ChatPromptTemplate	Formats the prompt for the LLM
 OpenAI(...)	Initializes the model client
 model.chat.completions.create(...)	Sends prompt and gets response
 return ...	Returns the generated answer
+
+🤖 Deep Dive: AI Integration in The RAG System
+🔌 1. Connecting to OpenRouter via the OpenAI SDK
+
+# model = OpenAI(
+#     base_url="https://openrouter.ai/api/v1",
+#     api_key=os.getenv("OPENROUTER_API_KEY"),
+# )
+
+
+✅ What’s happening here:
+You’re using the OpenAI SDK, but pointing it to OpenRouter’s API endpoint.
+base_url: Tells the SDK to send requests to OpenRouter instead of OpenAI.
+api_key: Authenticates your requests using a key stored in your .env file.
+🧠 Why this works:
+OpenRouter is API-compatible with OpenAI’s chat models.
+This means you can use the same SDK and method calls (chat.completions.create) to interact with models like:
+mistralai/mistral-7b-instruct
+gpt-4.1-mini
+meta-llama/llama-3-8b-instruct
+🧾 2. Sending a Chat Prompt to the Model
+
+# response = model.chat.completions.create(
+#    model="mistralai/mistral-7b-instruct",
+#    messages=messages,
+#    max_tokens=1000
+# )
+
+✅ What’s happening here:
+You’re sending a chat-style prompt to the model.
+model: Specifies which LLM to use.
+messages: A list of structured messages (system/user roles).
+max_tokens: Limits the length of the response to avoid excessive output.
+🧠 Why chat format?
+Chat models expect input as a conversation:
+system: Sets behavior or instructions.
+user: Asks a question.
+assistant: Responds.
+Your ChatPromptTemplate generates this format automatically.
+
+🧠 Example of messages Structure
+
+This structure helps the model understand:
+
+What context it should use
+What question it should answer
+What behavior it should follow (e.g., not hallucinate beyond the context)
+📤 3. Extracting the Model’s Response
+
+# return response.choices[0].message.content
+
+✅ What’s happening here:
+The model returns a response object with one or more choices.
+Each choice contains a message with the generated content.
+You extract the first choice and return its content.
+🔐 Security Note
+Using os.getenv("OPENROUTER_API_KEY") ensures:
+
+Your API key is not hardcoded in the script.
+You can easily switch keys or environments by changing the .env file.
+✅ Summary of AI Integration
+Component	Role
+OpenAI client	Connects to OpenRouter
+base_url	Redirects SDK to OpenRouter
+api_key	Authenticates your requests
+messages	Structured prompt for the LLM
+chat.completions.create()	Sends prompt and gets response
+response.choices[0].message.content	Extracts the final answer
+
+🧠 What Does SDK Mean?
+SDK stands for Software Development Kit.
+
+🔹 Definition:
+An SDK is a collection of tools, libraries, documentation, and code samples that developers use to build software applications for a specific platform or service.
+
+🔍 In Your Case: OpenAI SDK
+When you use this line:
+
+# from openai import OpenAI
+
+
+You're using the OpenAI SDK, which is a Python package that provides:
+
+Pre-built methods to interact with OpenAI or OpenRouter APIs
+Easy access to models like GPT-4, Mistral, Claude, etc.
+Built-in handling for authentication, formatting, and response parsing
+🧠 Why Use an SDK?
+Without an SDK, you'd have to:
+
+Manually format HTTP requests
+Handle authentication headers
+Parse JSON responses
+Deal with errors and retries
+With an SDK, you can simply write:
+
+response = model.chat.completions.create(...)
+
+
+And the SDK takes care of all the underlying complexity.
+
+✅ Summary
+Term	Meaning
+SDK	Software Development Kit — a set of tools to help developers interact with a platform
+OpenAI SDK	A Python toolkit to easily use OpenAI or OpenRouter models
+Benefit	Simplifies coding, reduces errors, and speeds up development
+
+🧩 SECTION 7: Main Execution Block
+
+🔹 Line 1: if __name__ == "__main__":
+✅ What it does:
+This is a Python idiom that ensures the code inside this block only runs when the script is executed directly (not imported as a module).
+🧠 Why it matters:
+If you later import this script into another file, this block won’t run automatically.
+It’s a way to define the entry point of your program.
+🔹 Line 2: documents = load_documents()
+✅ What it does:
+Calls the load_documents() function to read and extract text from all PDFs in the data/ folder.
+🧠 Output:
+A list of Document objects, each containing text and metadata.
+🔹 Line 3: chunks = split_text(documents)
+✅ What it does:
+Passes the loaded documents to split_text() to break them into smaller, overlapping chunks.
+🧠 Output:
+A list of chunked Document objects, ready for embedding.
+🔹 Line 4: save_to_chroma(chunks)
+✅ What it does:
+Embeds the chunks using Hugging Face embeddings.
+Stores them in a Chroma vector database on disk.
+🧠 Result:
+You now have a searchable knowledge base of your PDF content.
+🔹 Line 5: query = "Academic Strategies"
+✅ What it does:
+Defines a sample query string that you want to ask the system.
+🧠 You can replace this with:
+User input from a UI
+A command-line argument
+A dynamic query from another system
+🔹 Line 6: response = query_rag(query)
+✅ What it does:
+Sends the query to your RAG system:
+Retrieves relevant chunks from Chroma
+Formats a prompt with those chunks
+Sends it to the language model via OpenRouter
+Returns the generated answer
+🔹 Line 7: print("\nResponse:\n", response)
+✅ What it does:
+Displays the final answer from the model in the console.
+✅ Summary of This Section
+Line	Purpose
+if __name__ == "__main__"	Ensures the code runs only when executed directly
+load_documents()	Loads and extracts text from PDFs
+split_text()	Splits documents into manageable chunks
+save_to_chroma()	Embeds and stores chunks in a vector database
+query_rag()	Retrieves relevant chunks and generates an answer
+print()	Displays the result
