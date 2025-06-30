@@ -241,3 +241,183 @@ RecursiveCharacterTextSplitter	Splits long documents into manageable chunks
 chunk_size	Controls the size of each chunk
 chunk_overlap	Ensures context continuity between chunks
 split_documents()	Returns a list of chunked Document objects
+
+🧩 SECTION 5: Save Chunks to Chroma Vector Store
+
+# from langchain_huggingface import HuggingFaceEmbeddings
+# from langchain_chroma import Chroma
+# import os, shutil
+
+# def save_to_chroma(chunks):
+#    if os.path.exists(CHROMA_PATH):
+#        shutil.rmtree(CHROMA_PATH)
+
+
+🔹 Line 1–2: Importing Required Modules
+HuggingFaceEmbeddings: A LangChain wrapper that uses Hugging Face models to convert text into vector embeddings.
+Chroma: A vector store that allows you to store and search those embeddings efficiently.
+🔹 Line 3: import os, shutil
+These were imported earlier, but are used again here to manage the file system:
+os.path.exists(...): Checks if the Chroma directory already exists.
+shutil.rmtree(...): Deletes the directory and all its contents.
+🔹 Line 5–6: Check and Clear Existing Vector Store
+
+# if os.path.exists(CHROMA_PATH):
+#    shutil.rmtree(CHROMA_PATH)
+
+✅ What it does:
+If a Chroma vector store already exists at the specified path, it deletes it.
+🧠 Why?
+Ensures you're starting with a clean slate.
+Prevents mixing old and new data, which could lead to incorrect retrieval results.
+
+🔹 Line 7–9: Create Embedding Function
+
+# embedding_function = HuggingFaceEmbeddings(
+#    model_name="sentence-transformers/all-MiniLM-L6-v2"
+# )
+
+
+✅ What it does:
+Initializes an embedding model from Hugging Face.
+🧠 Concept: What are Embeddings?
+Embeddings are numerical representations of text.
+They allow you to compare the semantic similarity between pieces of text using vector math.
+The model "all-MiniLM-L6-v2" is a lightweight, fast, and accurate model for generating sentence embeddings.
+🔹 Line 10–13: Create and Persist Chroma Vector Store
+
+# db = Chroma.from_documents(
+#     chunks,
+#     embedding_function,
+#     persist_directory=CHROMA_PATH
+# )
+
+✅ What it does:
+Converts each chunk into a vector using the embedding model.
+Stores those vectors in a Chroma vector database.
+Saves the database to disk at the path defined by CHROMA_PATH.
+🧠 Concept: What is a Vector Store?
+A vector store is a specialized database that:
+Stores high-dimensional vectors
+Supports similarity search (e.g., find the most similar chunks to a query)
+Chroma is a local, lightweight vector store that integrates well with LangChain.
+🔹 Line 14: Print Confirmation
+
+# print(f"Saved {len(chunks)} chunks to {CHROMA_PATH}.")
+
+Confirms how many chunks were embedded and stored.
+✅ Summary of This Section
+Line	Purpose
+HuggingFaceEmbeddings	Converts text into vector form using a Hugging Face model
+Chroma.from_documents	Stores those vectors in a searchable database
+shutil.rmtree	Clears old vector data to avoid conflicts
+persist_directory	Saves the vector store to disk for reuse
+
+🧩 SECTION 6: Query the RAG System
+
+🔹 Line 1–2: Import Required Modules
+
+# from langchain.prompts import ChatPromptTemplate
+# from openai import OpenAI
+
+ChatPromptTemplate: A LangChain utility for formatting prompts in a structured way for chat models.
+OpenAI: The SDK used to interact with OpenRouter-compatible models (like Mistral or GPT-4.1).
+🔹 Function Definition
+
+# def query_rag(query_text):
+
+Defines a function that takes a user query (string) and returns a generated answer.
+This function performs retrieval + generation, the core of RAG.
+
+🔹 Re-initialize Embedding Function
+
+# embedding_function = HuggingFaceEmbeddings(
+#    model_name="sentence-transformers/all-MiniLM-L6-v2"
+# )
+
+Creates a new instance of the embedding model.
+This is used to convert the query into a vector for similarity search.
+🔹 Load Chroma Vector Store
+
+# db = Chroma(
+#    persist_directory=CHROMA_PATH,
+#    embedding_function=embedding_function
+# )
+
+Loads the previously saved Chroma vector store from disk.
+Associates it with the same embedding function to ensure compatibility.
+🔹 Perform Similarity Search
+
+# results = db.similarity_search_with_relevance_scores(query_text, k=3)
+
+Searches for the top 3 chunks most similar to the query.
+Returns a list of tuples: (Document, relevance_score).
+
+🧠 Concept: Similarity Search
+Compares the query vector to stored document vectors.
+Uses cosine similarity or other metrics to rank relevance.
+🔹 Filter Low-Relevance Results
+
+# if len(results) == 0 or results[0][1] < 0.1:
+#     return "No relevant results found."
+
+If no results are found or the top result has a low relevance score (< 0.1), return a fallback message.
+🔹 Construct Context from Results
+
+# context_text = "\n\n - -\n\n".join([doc.page_content for doc, _ in results])[:1000]
+
+Joins the top 3 chunks into a single string.
+Limits the context to 1000 characters to stay within token limits.
+🔹 Format Prompt Using Template
+
+# prompt_template = ChatPromptTemplate.from_template(PROMPT_TEMPLATE)
+# messages = prompt_template.format_messages(
+#     context=context_text,
+#     question=query_text
+# )
+
+Uses the earlier-defined PROMPT_TEMPLATE to format the prompt.
+Injects the retrieved context and user question into the template.
+Produces a list of messages suitable for chat-based models.
+🔹 Debug: Print API Key
+
+# print("DEBUG: OPENROUTER_API_KEY =", os.getenv("OPENROUTER_API_KEY"))
+
+Prints the API key (if loaded) to verify that environment variables are working.
+🔹 Initialize OpenRouter Model
+
+# model = OpenAI(
+#    base_url="https://openrouter.ai/api/v1",
+#    api_key=os.getenv("OPENROUTER_API_KEY"),
+# )
+
+
+Creates an instance of the OpenAI client configured to use OpenRouter.
+Uses the API key from the .env file.
+🔹 Send Prompt and Get Response
+
+# response = model.chat.completions.create(
+#     model="mistralai/mistral-7b-instruct",
+#     messages=messages,
+#     max_tokens=1000
+# )
+
+
+Sends the formatted prompt to the specified model.
+Requests a response with a maximum of 1000 tokens.
+🔹 Return the Final Answer
+
+# return response.choices[0].message.content
+
+Extracts and returns the generated answer from the response object.
+
+✅ Summary of This Section
+Line	Purpose
+embedding_function	Converts query into a vector
+Chroma(...)	Loads the vector store
+similarity_search_with_relevance_scores	Finds relevant chunks
+context_text	Builds context from retrieved chunks
+ChatPromptTemplate	Formats the prompt for the LLM
+OpenAI(...)	Initializes the model client
+model.chat.completions.create(...)	Sends prompt and gets response
+return ...	Returns the generated answer
