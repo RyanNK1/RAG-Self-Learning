@@ -1,20 +1,21 @@
-from sentence_transformers import SentenceTransformer
-#from langchain.embeddings import HuggingFaceEmbeddings
-#from langchain.vectorstores import Chroma
+import os
 import shutil
+from dotenv import load_dotenv
+
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_chroma import Chroma
+from langchain_openai import ChatOpenAI
+from openai import OpenAI
 from langchain_community.document_loaders import PyPDFDirectoryLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.schema import Document
-import os
 from langchain.prompts import ChatPromptTemplate
-#from langchain.chat_models import ChatOpenAI
-from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain_community.vectorstores import Chroma
-from langchain_community.chat_models import ChatOpenAI
-from dotenv import load_dotenv
+
+# Load environment variables
 load_dotenv()
 
-
+# Constants
+DATA_PATH = "data"
+CHROMA_PATH = "chroma"
 PROMPT_TEMPLATE = """
 Answer the question based only on the following context:
 {context}
@@ -22,13 +23,12 @@ Answer the question based only on the following context:
 Answer the question based on the above context: {question}
 """
 
-
-DATA_PATH = "data"
-
+# Step 1: Load PDF documents
 def load_documents():
     loader = PyPDFDirectoryLoader(DATA_PATH)
     return loader.load()
 
+# Step 2: Split documents into chunks
 def split_text(documents):
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=300,
@@ -38,14 +38,7 @@ def split_text(documents):
     )
     return splitter.split_documents(documents)
 
-# Load and chunk the documents
-documents = load_documents()
-chunks = split_text(documents)
-
-#print(f"Loaded {len(documents)} documents and split into {len(chunks)} chunks.")
-
-CHROMA_PATH = "chroma"
-
+# Step 3: Save chunks to Chroma vector store
 def save_to_chroma(chunks):
     if os.path.exists(CHROMA_PATH):
         shutil.rmtree(CHROMA_PATH)
@@ -59,51 +52,57 @@ def save_to_chroma(chunks):
         embedding_function,
         persist_directory=CHROMA_PATH
     )
-    db.persist()
     print(f"Saved {len(chunks)} chunks to {CHROMA_PATH}.")
 
-save_to_chroma(chunks)
-
+# Step 4: Query the RAG system
 def query_rag(query_text):
-    # Use the same embedding model as before
-    embedding_function = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+    embedding_function = HuggingFaceEmbeddings(
+        model_name="sentence-transformers/all-MiniLM-L6-v2"
+    )
 
-    # Load the Chroma DB
-    db = Chroma(persist_directory=CHROMA_PATH, embedding_function=embedding_function)
+    db = Chroma(
+        persist_directory=CHROMA_PATH,
+        embedding_function=embedding_function
+    )
 
-    # Search for relevant chunks
     results = db.similarity_search_with_relevance_scores(query_text, k=3)
 
-    # Handle no results or low relevance
-    if len(results) == 0 or results[0][1] < 0.5:
-        return "No relevant results found."
+    if len(results) == 0 or results[0][1] < 0.1:
+       return "No relevant results found."
 
-    # Combine the context
-    context_text = "\n\n - -\n\n".join([doc.page_content for doc, _ in results])
+    context_text = "\n\n - -\n\n".join([doc.page_content for doc, _ in results])[:1000]  # limit to 1000 characters
 
-    # Format the prompt
-    prompt = ChatPromptTemplate.from_template(PROMPT_TEMPLATE).format(
-        context=context_text,
+    prompt_template = ChatPromptTemplate.from_template(PROMPT_TEMPLATE)
+    messages = prompt_template.format_messages(
+        context=context_text,#SHorten context text
         question=query_text
     )
 
-    # Set up OpenRouter-compatible LLM
-    openrouter_key = os.getenv("OPENROUTER_API_KEY")
-    if not openrouter_key:
-        raise ValueError("OPENROUTER_API_KEY not found in environment variables.")
-    os.environ["OPENAI_API_KEY"] = openrouter_key
+    # Debug: Check if API key is loaded
+    print("DEBUG: OPENROUTER_API_KEY =", os.getenv("OPENROUTER_API_KEY"))
 
-    os.environ["OPENAI_API_BASE"] = "https://openrouter.ai/api/v1"
+    model = OpenAI(
+        base_url="https://openrouter.ai/api/v1",
+        api_key=os.getenv("OPENROUTER_API_KEY"),
+        #model="mistralai/mistral-7b-instruct"
+    )
 
-    model = ChatOpenAI()
+    #response = model.invoke(messages)
+    response=model.chat.completions.create(
+        model="mistralai/mistral-7b-instruct",#gpt-4.1-nano gpt-4.1-mini gpt-4.1
+        messages=messages,
+        max_tokens = 1000
+    )
+    return response.choices[0].message.content
 
-    # Generate the response
-    #response = model.predict(prompt)
-    response = model.invoke(prompt)
-    return response
+# Main execution
+if __name__ == "__main__":
+    documents = load_documents()
+    chunks = split_text(documents)
+    save_to_chroma(chunks)
 
-#query = "Explain how the YOLO method works"
-query = "What is Parkinson's"
-response = query_rag(query)
-print("\nResponse:\n", response)
+    query = "Academic Strategies"
+    response = query_rag(query)
+    print("\nResponse:\n", response)
+
 
